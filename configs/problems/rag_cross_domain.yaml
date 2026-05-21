@@ -1,0 +1,25 @@
+id: rag_cross_domain
+title: "Which RAG configurations are domain-sensitive vs domain-robust?"
+problem_statement: |
+  Different RAG approaches generalize unevenly across domains. Specifically, a
+  chunking strategy that works well in healthcare may fail in legal, and a
+  strategy that works in one legal sub-domain may fail in healthcare.
+  Systematically characterize which RAG configurations (chunking strategy,
+  embedding model, retriever, reranker) are domain-sensitive vs
+  domain-robust, and explain why.
+
+domains: ["healthcare", "legal"]
+datasets_hint:
+  healthcare: ["PubMedQA", "MedQA"]
+  legal: ["CUAD", "ContractNLI", "LegalBench"]
+
+success_criteria:
+  - "A controlled experimental matrix covering ≥3 chunking strategies × ≥3 embedding models × ≥2 retrievers × {with, without} reranker."
+  - "Per-domain evaluation with at least one standard metric (recall@k, MRR, or downstream QA accuracy)."
+  - "Explicit identification of configurations that are domain-robust (stable across domains) vs domain-sensitive (large per-domain variance), with a hypothesised mechanism."
+  - "Honest 'what we debunked' section if any prior claim is contradicted."
+
+compute_hint:
+  gpu: "NVIDIA RTX A5000"
+  num_pods: 4
+  estimated_minutes: 360

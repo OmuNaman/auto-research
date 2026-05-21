@@ -1,0 +1,24 @@
+llm:
+  model: "claude-opus-4-7"
+  max_tokens_per_phase: 16000
+  cache_system_prompt: true
+
+compute:
+  provider: "runpod"
+  default_gpu: "NVIDIA RTX A5000"
+  default_image: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
+  default_disk_gb: 50
+  wait_ready_timeout_s: 600
+
+planner:
+  max_refinement_rounds: 3
+  max_experiments_per_run: 64
+  max_wall_clock_hours: 24
+
+literature:
+  max_papers: 20
+  prefer_arxiv_pdf: true
+
+api:
+  host: "127.0.0.1"
+  port: 8000

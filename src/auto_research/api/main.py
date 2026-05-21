@@ -54,6 +54,7 @@ class AppDeps:
     llm: LLMProvider | None
     compute_factory: object   # callable -> ComputeProvider
     registry: PlannerRegistry
+    demo_mode: bool = False
 
 
 def create_app(
@@ -63,6 +64,7 @@ def create_app(
     bus: SQLiteEventBus | None = None,
     llm: LLMProvider | None = None,
     compute_factory=None,
+    demo_mode: bool = False,
 ) -> FastAPI:
     settings_final = settings or get_settings()
     configure_logging(settings_final.log_level)
@@ -77,6 +79,7 @@ def create_app(
     deps = AppDeps(
         settings=settings_final, store=s, bus=b, llm=llm,
         compute_factory=cf, registry=PlannerRegistry(),
+        demo_mode=demo_mode,
     )
     _opened_here = store is None
 

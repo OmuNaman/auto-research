@@ -33,6 +33,31 @@ def serve(
 
 
 @app.command()
+def demo(
+    host: str = typer.Option("127.0.0.1", help="API host"),
+    port: int = typer.Option(8000, help="API port"),
+) -> None:
+    """Start the server with FAKE LLM + FAKE compute. No API keys needed.
+
+    Exercise the full UI without burning Anthropic tokens or RunPod GPU hours.
+    Every event type fires; the report renders. Open http://localhost:3000
+    and launch a run from the UI.
+    """
+    from auto_research.demo import FakeDemoCompute, FakeDemoLLM
+    settings = get_settings()
+    settings.api_host = host
+    settings.api_port = port
+    configure_logging(settings.log_level)
+    fast = create_app(
+        settings=settings,
+        llm=FakeDemoLLM(),
+        compute_factory=lambda: FakeDemoCompute(),
+        demo_mode=True,
+    )
+    uvicorn.run(fast, host=host, port=port, log_level="info")
+
+
+@app.command()
 def run(
     problem_yaml: Path = typer.Argument(..., exists=True, readable=True),
     server: str = typer.Option(

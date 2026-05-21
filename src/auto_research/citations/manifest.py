@@ -110,6 +110,7 @@ class CitationManifest:
         *,
         http_client: httpx.AsyncClient | None = None,
         pdf_dir: Path | None = None,
+        skip_verification: bool = False,
     ) -> None:
         self.store = store
         self.bus = bus
@@ -118,6 +119,10 @@ class CitationManifest:
         self.client = http_client or httpx.AsyncClient(follow_redirects=True)
         self.resolver = Resolver(self.client)
         self.pdf_dir = pdf_dir
+        # When True, only ID-format validation runs; URL HEAD + Crossref/arXiv
+        # title-fuzz checks are skipped. ONLY for offline demo mode — never
+        # enable in production.
+        self.skip_verification = skip_verification
 
     async def close(self) -> None:
         if self._own_client:
@@ -127,8 +132,11 @@ class CitationManifest:
 
     async def add(self, candidate: Citation) -> Citation:
         self._validate_ids(candidate)
-        await self._verify_url(candidate.url)
-        resolved = await self._resolve_and_check_title(candidate)
+        if self.skip_verification:
+            resolved = candidate
+        else:
+            await self._verify_url(candidate.url)
+            resolved = await self._resolve_and_check_title(candidate)
         await self._persist(resolved)
         await self.bus.publish(self.run_id, CitationAddedEvent(
             run_id=self.run_id,

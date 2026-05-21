@@ -29,6 +29,19 @@ For headless use:
 uv run research run configs/problems/smoke.yaml
 ```
 
+### Demo mode (no API keys)
+
+To exercise the UI without spending Anthropic tokens or RunPod GPU hours:
+
+```bash
+uv run research demo   # starts backend with fake LLM + fake compute
+cd apps/web && pnpm dev
+# open http://localhost:3000, hit "+ New Run", launch the smoke preset.
+# you'll see the timeline advance, pods appear, metrics chart fill in,
+# citations cards render, and a real report.md / report.tex render in the
+# Artifacts tab — all without any external API calls.
+```
+
 ## Architecture
 
 See `/root/.claude/plans/okay-now-plan-about-iridescent-brooks.md` (the approved plan) for the full design, or `CLAUDE.md` for project conventions.

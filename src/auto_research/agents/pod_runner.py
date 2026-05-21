@@ -55,18 +55,23 @@ class ExperimentResult:
 
 async def _cost_ticker(
     bus: EventBus, run_id: str, pod: Pod, started_at: float, stop: asyncio.Event,
+    *, interval_s: float = 30.0,
 ) -> None:
-    while not stop.is_set():
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=30.0)
-            break
-        except asyncio.TimeoutError:
-            pass
+    async def _emit() -> None:
         elapsed_h = (time.time() - started_at) / 3600
         cost = pod.usd_per_hour * elapsed_h
         await bus.publish(run_id, CostTickEvent(
             run_id=run_id, total_usd=cost, by_pod={pod.id: cost},
         ))
+
+    await _emit()  # initial tick so short runs still show a cost event
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_s)
+            break
+        except asyncio.TimeoutError:
+            await _emit()
+    await _emit()  # final tick captures total elapsed
 
 
 async def _log_streamer(

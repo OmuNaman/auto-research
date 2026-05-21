@@ -89,6 +89,7 @@ async def _run_planner(deps, run_id: str, problem_yaml: str) -> None:
     manifest = CitationManifest(
         deps.store, deps.bus, run_id,
         http_client=http, pdf_dir=workspace / "pdfs",
+        skip_verification=getattr(deps, "demo_mode", False),
     )
     try:
         planner = Planner(

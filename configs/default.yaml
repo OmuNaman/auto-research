@@ -14,6 +14,8 @@ planner:
   max_refinement_rounds: 3
   max_experiments_per_run: 64
   max_wall_clock_hours: 24
+  max_concurrent_pods: 4
+  max_cost_usd: 50.0
 
 literature:
   max_papers: 20

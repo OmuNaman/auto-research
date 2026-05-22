@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     contact_email: str = "research@example.com"
     hf_token: SecretStr | None = None
 
+    max_cost_usd: float = 50.0
+    max_concurrent_pods: int = 4
+
     workspace_root: Path = Path("./workspaces")
     db_path: Path = Path("./workspaces/state.db")
 

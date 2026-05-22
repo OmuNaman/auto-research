@@ -97,7 +97,8 @@ class CannedLLM(LLMProvider):
         self.calls: list[tuple[str, str]] = []
 
     async def stream_phase(self, *, system_prompt, user_prompt, tools, subagents=None,
-                          on_event, agent_name="planner", max_turns=None) -> PhaseResult:
+                          on_event, agent_name="planner", max_turns=None,
+                          builtin_tools=None) -> PhaseResult:
         self.calls.append((agent_name, user_prompt))
         # Optionally invoke tools the script declares it wants to call
         script_text = (self.scripts.get(agent_name) or [""]).pop(0)
@@ -201,9 +202,9 @@ async def test_planner_full_happy_path(planner_setup):
         ("write", "done"),
     ]
 
-    # Pod was provisioned and terminated
+    # Pod was provisioned and left running (pods persist after completion)
     assert len(compute.provisioned) == 1
-    assert compute.terminated == [compute.provisioned[0].id]
+    assert compute.terminated == []
 
     # Report files written
     md = workspace / "report" / "report.md"

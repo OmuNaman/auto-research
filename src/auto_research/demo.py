@@ -68,7 +68,7 @@ class FakeDemoLLM(LLMProvider):
 
     async def stream_phase(self, *, system_prompt, user_prompt, tools,
                           subagents=None, on_event, agent_name="planner",
-                          max_turns=None) -> PhaseResult:
+                          max_turns=None, builtin_tools=None) -> PhaseResult:
         # Stream a short "thinking" message
         thought = {
             "literature": "Searching arXiv for foundation papers on retrieval-augmented generation...",

@@ -39,7 +39,7 @@ class FakeProvider(LLMProvider):
 
     async def stream_phase(self, *, system_prompt, user_prompt, tools,
                           subagents=None, on_event, agent_name="planner",
-                          max_turns=None) -> PhaseResult:
+                          max_turns=None, builtin_tools=None) -> PhaseResult:
         self.last_tools = tools
         self.last_subagents = subagents
         self.last_user_prompt = user_prompt

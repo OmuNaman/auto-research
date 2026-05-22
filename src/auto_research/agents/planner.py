@@ -128,6 +128,8 @@ def _extract_json(text: str) -> dict[str, Any]:
 class PlannerConfig:
     max_refinement_rounds: int = 3
     max_experiments_per_run: int = 64
+    max_concurrent_pods: int = 4
+    max_cost_usd: float = 50.0
     default_gpu_type: str = "NVIDIA RTX A5000"
     default_image: str = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 
@@ -312,14 +314,29 @@ class Planner:
         await self.store.save_checkpoint(self.run_id, Phase.DESIGN.value, spec)
 
     async def _execute(self, state: _RunState) -> None:
+        import asyncio
+        import traceback as tb
+
         await self.sm.transition(Phase.DESIGN, Phase.PROVISION, reason="provision")
         self._current_phase = Phase.PROVISION
         await self.sm.transition(Phase.PROVISION, Phase.EXECUTE, reason="execute")
         self._current_phase = Phase.EXECUTE
 
-        new_results: list[ExperimentResult] = []
-        for i, exp in enumerate(state.experiments):
+        sem = asyncio.Semaphore(self.config.max_concurrent_pods)
+
+        async def _run_one(exp: dict, i: int) -> ExperimentResult | Exception:
             exp_id = exp.get("experiment_id") or f"exp{i+1}"
+            current_cost = await self.store.get_total_cost(self.run_id)
+            if current_cost >= self.config.max_cost_usd:
+                err = RuntimeError(
+                    f"Budget cap ${self.config.max_cost_usd:.2f} reached; "
+                    f"skipping {exp_id}"
+                )
+                await self.bus.publish(self.run_id, ErrorEvent(
+                    run_id=self.run_id, where=f"planner.execute.{exp_id}",
+                    message=str(err), traceback="", fatal=False,
+                ))
+                return err
             spec = ExperimentSpec(
                 experiment_id=exp_id,
                 pod_spec=PodSpec(
@@ -333,18 +350,23 @@ class Planner:
                 requirements=list(exp.get("requirements") or []),
                 timeout_s=int(exp.get("timeout_s") or 1800),
             )
-            try:
-                res = await run_experiment(
-                    spec=spec, provider=self.compute, bus=self.bus,
-                    run_id=self.run_id, workspace_dir=self.workspace,
-                )
-                new_results.append(res)
-            except Exception as exc:  # noqa: BLE001
-                import traceback
-                await self.bus.publish(self.run_id, ErrorEvent(
-                    run_id=self.run_id, where=f"planner.execute.{exp_id}",
-                    message=str(exc), traceback=traceback.format_exc(), fatal=False,
-                ))
+            async with sem:
+                try:
+                    return await run_experiment(
+                        spec=spec, provider=self.compute, bus=self.bus,
+                        run_id=self.run_id, workspace_dir=self.workspace,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    await self.bus.publish(self.run_id, ErrorEvent(
+                        run_id=self.run_id, where=f"planner.execute.{exp_id}",
+                        message=str(exc), traceback=tb.format_exc(), fatal=False,
+                    ))
+                    return exc
+
+        raw = await asyncio.gather(
+            *[_run_one(exp, i) for i, exp in enumerate(state.experiments)]
+        )
+        new_results = [r for r in raw if isinstance(r, ExperimentResult)]
         state.results.extend(new_results)
         await self.store.save_checkpoint(self.run_id, Phase.EXECUTE.value, {
             "experiment_ids": [r.experiment_id for r in new_results],

@@ -125,10 +125,10 @@ async def run_experiment(
     run_id: str,
     workspace_dir: Path,
 ) -> ExperimentResult:
-    """Provision pod → upload+run script → stream logs+metrics → terminate.
+    """Provision pod → upload+run script → stream logs+metrics → return.
 
-    Caller is responsible for catching errors and handling them; this function
-    guarantees that the pod is always terminated (best-effort) before returning.
+    The pod is NOT terminated after completion; it stays alive on RunPod so
+    the user can inspect results or reuse the environment.
     """
     t0 = time.time()
     pod = await provider.provision(spec.pod_spec)
@@ -141,76 +141,70 @@ async def run_experiment(
         run_id=run_id, pod_id=pod.id, status="provisioning",
     ))
 
+    ready = await provider.wait_ready(pod.id)
+    await bus.publish(run_id, PodStatusEvent(
+        run_id=run_id, pod_id=pod.id, status="ready",
+    ))
+
+    # Stage the script
+    script_local = workspace_dir / f"{spec.experiment_id}.py"
+    script_local.parent.mkdir(parents=True, exist_ok=True)
+    script_local.write_text(spec.script)
+    await provider.upload(ready, script_local, "/workspace/experiment.py")
+
+    if spec.requirements:
+        req_line = " ".join(spec.requirements)
+        await provider.exec(ready, f"pip install --quiet {req_line}", timeout_s=600)
+
+    # Start streamers + cost ticker
+    stop = asyncio.Event()
+    metrics_collected: list[dict[str, Any]] = []
+    tasks = [
+        asyncio.create_task(_log_streamer(
+            bus, run_id, provider, ready, spec.log_path, stop)),
+        asyncio.create_task(_metric_streamer(
+            bus, run_id, provider, ready, spec, metrics_collected, stop)),
+        asyncio.create_task(_cost_ticker(bus, run_id, ready, t0, stop)),
+    ]
+
+    await bus.publish(run_id, PodStatusEvent(
+        run_id=run_id, pod_id=pod.id, status="running",
+    ))
     try:
-        ready = await provider.wait_ready(pod.id)
-        await bus.publish(run_id, PodStatusEvent(
-            run_id=run_id, pod_id=pod.id, status="ready",
-        ))
-
-        # Stage the script
-        script_local = workspace_dir / f"{spec.experiment_id}.py"
-        script_local.parent.mkdir(parents=True, exist_ok=True)
-        script_local.write_text(spec.script)
-        await provider.upload(ready, script_local, "/workspace/experiment.py")
-
-        if spec.requirements:
-            req_line = " ".join(spec.requirements)
-            await provider.exec(ready, f"pip install --quiet {req_line}", timeout_s=600)
-
-        # Start streamers + cost ticker
-        stop = asyncio.Event()
-        metrics_collected: list[dict[str, Any]] = []
-        tasks = [
-            asyncio.create_task(_log_streamer(
-                bus, run_id, provider, ready, spec.log_path, stop)),
-            asyncio.create_task(_metric_streamer(
-                bus, run_id, provider, ready, spec, metrics_collected, stop)),
-            asyncio.create_task(_cost_ticker(bus, run_id, ready, t0, stop)),
-        ]
-
-        await bus.publish(run_id, PodStatusEvent(
-            run_id=run_id, pod_id=pod.id, status="running",
-        ))
-        try:
-            exec_cmd = (
-                f"touch {spec.log_path} {spec.metrics_path} && "
-                f"python /workspace/experiment.py > {spec.log_path} 2>&1"
-            )
-            result = await provider.exec(ready, exec_cmd, timeout_s=spec.timeout_s)
-        finally:
-            stop.set()
-            for t in tasks:
-                t.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Download artifacts (metrics.jsonl + log) for the record
-        artifact_dir = workspace_dir / "experiments" / spec.experiment_id
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        artifacts: list[Path] = []
-        for remote, local in [
-            (spec.metrics_path, artifact_dir / "metrics.jsonl"),
-            (spec.log_path, artifact_dir / "run.log"),
-        ]:
-            try:
-                await provider.download(ready, remote, local)
-                artifacts.append(local)
-            except Exception as exc:  # noqa: BLE001
-                _log.warning("pod_runner.download_failed",
-                             pod_id=pod.id, remote=remote, error=str(exc))
-
-        return ExperimentResult(
-            experiment_id=spec.experiment_id,
-            pod_id=pod.id,
-            exit_code=result.exit_code,
-            metrics=metrics_collected,
-            artifact_paths=artifacts,
-            duration_s=time.time() - t0,
+        exec_cmd = (
+            f"touch {spec.log_path} {spec.metrics_path} && "
+            f"python /workspace/experiment.py > {spec.log_path} 2>&1"
         )
+        result = await provider.exec(ready, exec_cmd, timeout_s=spec.timeout_s)
     finally:
+        stop.set()
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Download artifacts (metrics.jsonl + log) for the record
+    artifact_dir = workspace_dir / "experiments" / spec.experiment_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifacts: list[Path] = []
+    for remote, local in [
+        (spec.metrics_path, artifact_dir / "metrics.jsonl"),
+        (spec.log_path, artifact_dir / "run.log"),
+    ]:
         try:
-            await provider.terminate(pod.id)
-            await bus.publish(run_id, PodStatusEvent(
-                run_id=run_id, pod_id=pod.id, status="terminated",
-            ))
+            await provider.download(ready, remote, local)
+            artifacts.append(local)
         except Exception as exc:  # noqa: BLE001
-            _log.warning("pod_runner.terminate_failed", pod_id=pod.id, error=str(exc))
+            _log.warning("pod_runner.download_failed",
+                         pod_id=pod.id, remote=remote, error=str(exc))
+
+    await bus.publish(run_id, PodStatusEvent(
+        run_id=run_id, pod_id=pod.id, status="completed",
+    ))
+    return ExperimentResult(
+        experiment_id=spec.experiment_id,
+        pod_id=pod.id,
+        exit_code=result.exit_code,
+        metrics=metrics_collected,
+        artifact_paths=artifacts,
+        duration_s=time.time() - t0,
+    )

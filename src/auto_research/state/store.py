@@ -138,6 +138,13 @@ class StateStore:
         )
         await self.conn.commit()
 
+    async def get_total_cost(self, run_id: str) -> float:
+        async with self.conn.execute(
+            "SELECT total_cost_usd FROM runs WHERE id = ?", (run_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        return float(row[0]) if row else 0.0
+
     # ---------------------------------------------------------------- events
 
     async def append_event(self, run_id: str, type_: str, payload: dict[str, Any]) -> int:

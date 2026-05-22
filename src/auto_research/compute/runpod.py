@@ -107,7 +107,8 @@ class RunPodProvider(ComputeProvider):
             "gpuCount": spec.gpu_count,
             "containerDiskInGb": spec.disk_gb,
             "ports": [f"{p}/tcp" for p in spec.ports],
-            "env": [{"key": k, "value": v} for k, v in spec.env.items()],
+            # /v1/pods schema wants env as a {key:value} object, not [{key,value}, ...]
+            "env": dict(spec.env),
         }
         if spec.volume_gb > 0:
             payload["volumeInGb"] = spec.volume_gb

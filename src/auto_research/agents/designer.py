@@ -19,6 +19,15 @@ and executed; it must:
     each with a `step` field and any numeric metrics),
   - exit 0 on success.
 
+`gpu_type` MUST be one of the following exact RunPod IDs (case- and \
+punctuation-sensitive). Pick the cheapest tier that fits the working set:
+
+  - "NVIDIA RTX A4000"          16 GB,  $0.17/hr  (cheap small-VRAM baseline)
+  - "NVIDIA RTX A5000"          24 GB,  $0.16/hr  (mid-tier, best $/GB)
+  - "NVIDIA GeForce RTX 4090"   24 GB,  $0.34/hr  (fast consumer Ada)
+  - "NVIDIA A100 80GB PCIe"     80 GB,  $1.19/hr  (large-model training)
+  - "NVIDIA H100 80GB HBM3"     80 GB,  $2.69/hr  (top-end Hopper, only if needed)
+
 Emit the final design as the LAST message in this exact JSON form:
 
 {

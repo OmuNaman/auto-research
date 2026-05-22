@@ -129,6 +129,7 @@ def _extract_json(text: str) -> dict[str, Any]:
 class PlannerConfig:
     max_refinement_rounds: int = 3
     max_experiments_per_run: int = 64
+    # Verified RunPod gpuTypeId (see designer.py for the full menu of valid IDs).
     default_gpu_type: str = "NVIDIA RTX A5000"
     default_image: str = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 

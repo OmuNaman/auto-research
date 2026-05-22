@@ -5,7 +5,7 @@ llm:
 
 compute:
   provider: "runpod"
-  default_gpu: "NVIDIA RTX A5000"
+  default_gpu: "NVIDIA RTX A5000"  # verified RunPod gpuTypeId — see designer.py for full menu
   default_image: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
   default_disk_gb: 50
   wait_ready_timeout_s: 600

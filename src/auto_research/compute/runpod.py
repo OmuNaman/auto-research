@@ -117,6 +117,9 @@ class RunPodProvider(ComputeProvider):
             payload["dataCenterIds"] = [spec.datacenter_id or self._default_dc]
 
         r = await self.client.post("/pods", json=payload)
+        if not r.is_success:
+            _log.error("runpod.provision_failed",
+                       status=r.status_code, body=r.text, payload=payload)
         r.raise_for_status()
         data = r.json()
         pod_id = str(data.get("id") or data.get("pod", {}).get("id") or "")

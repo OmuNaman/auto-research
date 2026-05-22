@@ -185,13 +185,19 @@ function reduce(s: StreamState, a: Action): StreamState {
 
 const STORAGE_KEY = (runId: string) => `run:${runId}:lastId`;
 
+// Connect directly to FastAPI — Next.js rewrites() buffer responses and
+// break SSE streaming. CORS is enabled on the FastAPI side for localhost:3000.
+const SSE_BASE =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE) ||
+  "http://127.0.0.1:8000";
+
 export function useRunStream(runId: string): StreamState {
   const [state, dispatch] = useReducer(reduce, empty);
 
   useEffect(() => {
     dispatch({ type: "reset" });
     const lastSeen = sessionStorage.getItem(STORAGE_KEY(runId)) ?? "0";
-    const url = `/api/runs/${runId}/events?after_id=${lastSeen}`;
+    const url = `${SSE_BASE}/runs/${runId}/events?after_id=${lastSeen}`;
     const es = new EventSource(url);
     es.onopen = () => dispatch({ type: "connected", v: true });
     es.onerror = () => dispatch({ type: "connected", v: false });

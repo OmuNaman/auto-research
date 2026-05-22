@@ -324,6 +324,7 @@ class Planner:
                 experiment_id=exp_id,
                 pod_spec=PodSpec(
                     gpu_type=exp.get("gpu_type") or self.config.default_gpu_type,
+                    gpu_count=int(exp.get("gpu_count") or 1),
                     image=exp.get("image") or self.config.default_image,
                     disk_gb=int(exp.get("disk_gb") or 30),
                     name=f"{self.run_id[:8]}-{exp_id}",

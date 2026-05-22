@@ -136,5 +136,11 @@ class LLMProvider(ABC):
         on_event: OnEvent,
         agent_name: str = "planner",
         max_turns: int | None = None,
+        builtin_tools: list[str] | None = None,
     ) -> PhaseResult:
-        """Run one tool-use loop to completion, emitting events via on_event."""
+        """Run one tool-use loop to completion, emitting events via on_event.
+
+        ``builtin_tools`` lists Claude Code built-in tool names to enable for
+        this phase (e.g. ``["WebSearch", "WebFetch"]``). They are added to the
+        allowed-tools list alongside any MCP tools in ``tools``.
+        """

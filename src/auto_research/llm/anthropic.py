@@ -93,11 +93,15 @@ class AnthropicProvider(LLMProvider):
         on_event: OnEvent,
         agent_name: str = "planner",
         max_turns: int | None = None,
+        builtin_tools: list[str] | None = None,
     ) -> PhaseResult:
         sdk_tools = [_wrap_tool(t) for t in tools]
         server = create_sdk_mcp_server(name=MCP_SERVER_NAME, version="0.1.0", tools=sdk_tools)
 
+        # MCP tool names + any requested Claude Code built-in tool names
         allowed = [f"mcp__{MCP_SERVER_NAME}__{t.name}" for t in tools]
+        if builtin_tools:
+            allowed = allowed + builtin_tools
         agents = (
             {s.name: _to_agent_definition(s) for s in subagents} if subagents else None
         )
@@ -107,6 +111,7 @@ class AnthropicProvider(LLMProvider):
             system_prompt=system_prompt,
             mcp_servers={MCP_SERVER_NAME: server},
             allowed_tools=allowed,
+            tools=builtin_tools or None,
             permission_mode="bypassPermissions",
             agents=agents,
             cwd=self._cwd,

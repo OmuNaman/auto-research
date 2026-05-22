@@ -24,6 +24,7 @@ import yaml
 from auto_research.agents.analyst import ANALYST_SYSTEM_PROMPT
 from auto_research.agents.designer import DESIGNER_SYSTEM_PROMPT
 from auto_research.agents.literature import (
+    LITERATURE_BUILTIN_TOOLS,
     LITERATURE_SYSTEM_PROMPT,
     make_literature_tools,
 )
@@ -55,8 +56,6 @@ from auto_research.llm.base import (
 from auto_research.logging import bind_run_id, get_logger
 from auto_research.state.store import StateStore
 from auto_research.tools.report_render import render_report
-from auto_research.tools.search_arxiv import search_arxiv
-from auto_research.tools.search_semantic_scholar import search_semantic_scholar
 
 _log = get_logger(__name__)
 
@@ -241,14 +240,6 @@ class Planner:
         await self.sm.transition(Phase.INIT, Phase.LITERATURE, reason="start")
         self._current_phase = Phase.LITERATURE
 
-        async def on_search_arxiv(args: dict) -> dict:
-            hits = await search_arxiv(args["query"], limit=args.get("limit", 10))
-            return {"hits": [h.__dict__ for h in hits]}
-
-        async def on_search_s2(args: dict) -> dict:
-            hits = await search_semantic_scholar(args["query"], limit=args.get("limit", 10))
-            return {"hits": [h.__dict__ for h in hits]}
-
         async def on_add_citation(args: dict) -> dict:
             try:
                 c = Citation(
@@ -264,23 +255,20 @@ class Planner:
             except NoFabricationError as exc:
                 return {"ok": False, "error": str(exc)}
 
-        tools = make_literature_tools(
-            on_search_arxiv=on_search_arxiv,
-            on_search_s2=on_search_s2,
-            on_add_citation=on_add_citation,
-        )
+        tools = make_literature_tools(on_add_citation=on_add_citation)
         result = await self.llm.stream_phase(
             system_prompt=LITERATURE_SYSTEM_PROMPT,
             user_prompt=(
                 "Problem statement:\n\n"
                 f"{state.problem.get('problem_statement', '')}\n\n"
                 f"Domains: {state.problem.get('domains') or []}\n"
-                "Find 3-8 relevant papers and register them via add_citation. "
-                "End with the JSON summary as instructed."
+                "Search the web for 3-8 relevant papers, read them, and register "
+                "each via add_citation. End with the JSON summary as instructed."
             ),
             tools=tools,
             on_event=self._on_llm("literature"),
             agent_name="literature",
+            builtin_tools=LITERATURE_BUILTIN_TOOLS,
         )
         try:
             summary = _extract_json(result.final_text)
